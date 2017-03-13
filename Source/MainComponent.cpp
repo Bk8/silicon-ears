@@ -4,6 +4,7 @@
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "rubberband/RubberBandStretcher.h"
 #include "ReferenceCountedBuffer.h"
+#include <sstream>
 
 class MainContentComponent   : public AudioAppComponent,
                                public ChangeListener,
@@ -118,16 +119,16 @@ public:
                 transportSource.getNextAudioBlock (bufferToFill);
 
 
-                const float **bufferToRead = bufferToFill.buffer->getArrayOfReadPointers();
+                // const float **bufferToRead = bufferToFill.buffer->getArrayOfReadPointers();
 
-                stretcher.setPitchScale(pitchSlider.getValue());
-                stretcher.setTimeRatio(durationSlider.getValue());
+                // stretcher.setPitchScale(pitchSlider.getValue());
+                // stretcher.setTimeRatio(durationSlider.getValue());
 
-                stretcher.process(bufferToRead, bufferToFill.numSamples ,false);
+                // stretcher.process(bufferToRead, bufferToFill.numSamples ,false);
 
-                float **bufferToWrite = bufferToFill.buffer->getArrayOfWritePointers();
+                // float **bufferToWrite = bufferToFill.buffer->getArrayOfWritePointers();
 
-                stretcher.retrieve(bufferToWrite, bufferToFill.numSamples);
+                // stretcher.retrieve(bufferToWrite, bufferToFill.numSamples);
 
         }
 
@@ -254,9 +255,32 @@ private:
                                      File::nonexistent,
                                      "*.wav");
 
+                std::stringstream ss;
+                std::stringstream newpath;
+
                 if (chooser.browseForFileToOpen()){
                         const File file (chooser.getResult());
-                        AudioFormatReader* reader = formatManager.createReaderFor(file);
+                        String path = file.getFullPathName();
+
+                        newpath << path << ".out.wav";
+
+                        ss << "rubberband -t "
+                           << durationSlider.getValue()
+                           << " -f "
+                           << pitchSlider.getValue()
+                           << " " << path << " "
+                           << newpath.str();
+
+                        std::cerr << "here:" << ss.str() << std::endl;
+                        std::system(ss.str().c_str());
+                        std::cerr << "there" << std::endl;
+
+                        const File fuck = File(path);
+
+
+
+                        AudioFormatReader* reader = formatManager.createReaderFor(fuck);
+                        std::cerr << "created reader";
                         if (reader != nullptr){
                                 ScopedPointer<AudioFormatReaderSource> newSource =
                                         new AudioFormatReaderSource (reader, true);

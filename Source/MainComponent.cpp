@@ -114,7 +114,9 @@ public:
                 size_t writeOffset = 0;
                 consumeBuffer->writeTo = 0;
 
-                size_t fileOffset = 0;
+                lenInSamples = reader->lengthInSamples;
+
+                playbackPosition.set( 0);
 
                 AudioSampleBuffer stretcherOut(consumeBuffer->getAudioSampleBuffer()->getNumChannels(),
                                                2048 * 2 * 2 * 2);
@@ -137,7 +139,7 @@ public:
                                 reader->read(produceBuffer->getAudioSampleBuffer(),
                                              readOffset,
                                              readToEnd,
-                                             fileOffset,
+                                             playbackPosition.get(),
                                              true,
                                              true);
                                 readOffset += readToEnd;
@@ -145,7 +147,7 @@ public:
                                 reader->read(produceBuffer->getAudioSampleBuffer(),
                                              readOffset,
                                              readOverflow,
-                                             fileOffset,
+                                             playbackPosition.get(),
                                              true,
                                              true);
                                 readOffset += readOverflow;
@@ -153,19 +155,19 @@ public:
                                 reader->read(produceBuffer->getAudioSampleBuffer(),
                                              readOffset,
                                              stretcherSamplesNeeded,
-                                             fileOffset,
+                                             playbackPosition.get(),
                                              true,
                                              true);
                         }
 
-                        if(fileOffset > reader->lengthInSamples){
-                                fileOffset = 0;
+                        if(playbackPosition.get() > reader->lengthInSamples){
+                                playbackPosition.set ( 0 );
                         }
 
-                        fileOffset += stretcherSamplesNeeded;
+                        //std::cerr << stretcherSamplesNeeded << "needed" << std::endl;
+
 
                         int numProduceChannels = produceBuffer->getAudioSampleBuffer()->getNumChannels();
-                        int numConsumeChannels = consumeBuffer->getAudioSampleBuffer()->getNumChannels();
 
                         float const **buffersToRead = produceBuffer->getAudioSampleBuffer()->getArrayOfReadPointers();
                         float **buffersToWrite = stretcherOut.getArrayOfWritePointers();
@@ -181,6 +183,8 @@ public:
 
                         int samplesAvailable = stretcher.available();
 
+                        playbackPosition += samplesAvailable;
+
                         if(samplesAvailable > stretcherOut.getNumSamples()){
                                 stretcherOut.setSize(stretcherOut.getNumChannels(),
                                                      2 * samplesAvailable);
@@ -190,16 +194,21 @@ public:
 
                         int potentialWrite = samplesAvailable + consumeBuffer->writeTo.get();
 
-                        jassert(samplesAvailable < consumeBuffer->getAudioSampleBuffer()->getNumSamples());
 
+                        // std::cerr << "potential " << potentialWrite << " avail " << samplesAvailable << std::endl;
+
+                        // for(int i = 0; i < samplesAvailable; i++){
+                        //         std::cerr << "i: " << i << " " << stretcherOut.getReadPointer(0)[i] << std::endl;
+                        // }
 
                         // FIXME: Shitty code. Break to functions
-                        if(potentialWrite <
-                           consumeBuffer->getAudioSampleBuffer()->getNumSamples()){
-                                while(consumeBuffer->playFrom.get() < potentialWrite &&
-                                      consumeBuffer->playFrom.get() > consumeBuffer->writeTo.get()){
-                                        //std::cerr << "spin inside first writer bounds check " << std::endl;
+                        if(potentialWrite < consumeBuffer->getAudioSampleBuffer()->getNumSamples()){
+                                while(consumeBuffer->playFrom.get() < potentialWrite
+                                      && consumeBuffer->playFrom.get() > consumeBuffer->writeTo.get()
+                                      ){
+                                        ;
                                 }
+
                                 for(int channel = 0;
                                     channel < consumeBuffer->getAudioSampleBuffer()->getNumChannels();
                                     ++channel){
@@ -211,7 +220,21 @@ public:
                                                                                         samplesAvailable);
                                 }
                                 consumeBuffer->writeTo.set(potentialWrite);
-                        } else {
+                        }
+                        else if(potentialWrite == consumeBuffer->getAudioSampleBuffer()->getNumSamples()){
+                                for(int channel = 0;
+                                    channel < consumeBuffer->getAudioSampleBuffer()->getNumChannels();
+                                    ++channel){
+                                        consumeBuffer->getAudioSampleBuffer()->copyFrom(channel,
+                                                                                        consumeBuffer->writeTo.get(),
+                                                                                        stretcherOut,
+                                                                                        channel % stretcherOut.getNumChannels(),
+                                                                                        0,
+                                                                                        samplesAvailable);
+                                }
+                                consumeBuffer->writeTo.set(0);
+                        }
+                        else {
                                 int tmpPlayFrom = consumeBuffer->playFrom.get();
                                 while((tmpPlayFrom > consumeBuffer->writeTo.get() &&
                                        tmpPlayFrom < consumeBuffer-> getAudioSampleBuffer()->getNumSamples()) ||
@@ -227,6 +250,12 @@ public:
                                 int spaceLeft = consumeBuffer->getAudioSampleBuffer()->getNumSamples()
                                         - consumeBuffer->writeTo.get();
                                 int overflow = samplesAvailable - spaceLeft;
+
+                                //std::cout << "potential " << potentialWrite << std::endl;
+                                //std::cout << "spaceleft: " << spaceLeft << std::endl;
+                                //std::cout << "overflow: " << overflow<< std::endl;
+
+
 
                                 for(int channel = 0;
                                     channel < consumeBuffer->getAudioSampleBuffer()->getNumChannels();
@@ -253,6 +282,8 @@ public:
                                                          overflow);
                                 }
 
+                                //std::cout << "first sample " << consumeBuffer->getAudioSampleBuffer()->getReadPointer(0)[0];
+
                                 consumeBuffer->writeTo.set(overflow);
                         }
                 }
@@ -269,15 +300,16 @@ public:
 
                         ReferenceCountedBuffer::Ptr newProdBuffer = new ReferenceCountedBuffer(file.getFileName(),
                                                                                                reader->numChannels,
-                                                                                               1024 * 1024);
+                                                                                               4096 * 4);
 
                         ReferenceCountedBuffer::Ptr newConsBuffer = new ReferenceCountedBuffer(file.getFileName(),
                                                                                                reader->numChannels,
-                                                                                               1024 * 1024 * 2);
+                                                                                               reader->lengthInSamples);
 
 
                         buffers.add(newProdBuffer);
                         buffers.add(newConsBuffer);
+
 
                         loadStretchBuffer = newProdBuffer;
                         playStretchedBuffer = newConsBuffer;
@@ -330,6 +362,9 @@ public:
 
         void getNextAudioBlock (const AudioSourceChannelInfo& bufferToFill) override // called from AUDIO thread
         {
+                while(state != Playing){
+                        ;
+                }
                 playbackBlockSize = bufferToFill.numSamples;
 
                 //std::cerr << "getting next audio-block" << std::endl;
@@ -352,7 +387,9 @@ public:
                 int potentialPlay = stretched->playFrom.get() + bufferToFill.numSamples;
                 if(potentialPlay <
                    stretched->getAudioSampleBuffer()->getNumSamples()){
-                        while((potentialPlay > stretched->writeTo.get())&& (stretched->playFrom.get() < stretched->writeTo.get())){
+                        while((potentialPlay > stretched->writeTo.get())
+                              &&(stretched->playFrom.get() < stretched->writeTo.get())
+                              ){
                                 ;
                                 //                              std::cerr << "spining inside first play bound check" << std::endl;
                         }
@@ -365,7 +402,18 @@ public:
                                                               bufferToFill.numSamples);
                         }
                         stretched->playFrom.set(potentialPlay);
-                } else {
+                } else if(potentialPlay == stretched->getAudioSampleBuffer()->getNumSamples()){
+                        for(int channel = 0; channel < numOutputChannels; ++channel){
+                                bufferToFill.buffer->copyFrom(channel,
+                                                              bufferToFill.startSample,
+                                                              *stretched->getAudioSampleBuffer(),
+                                                              channel % numInputChannels,
+                                                              stretched->playFrom.get(),
+                                                              bufferToFill.numSamples);
+                        }
+                        stretched->playFrom.set(0);
+                }
+                else {
                         int tmpWriteTo = stretched->writeTo.get();
                         while((stretched->playFrom.get() < tmpWriteTo &&
                                tmpWriteTo < stretched->getAudioSampleBuffer()->getNumSamples()) ||
@@ -377,7 +425,7 @@ public:
                         for(int channel = 0;
                             channel < stretched->getAudioSampleBuffer()->getNumChannels();
                             ++channel){
-                                std::cerr << channel << std::endl;
+                                //                                std::cerr << channel << std::endl;
                                 bufferToFill.buffer->copyFrom(channel,
                                                               0,
                                                               *stretched->getAudioSampleBuffer(),
@@ -396,7 +444,7 @@ public:
                                                                0,
                                                                bufferToFill.buffer->getNumSamples() - dregs);
                         }
-
+                        //std::cout << "overflow case in reader" << std::endl;
                         stretched->playFrom.set(dregs);
 
                 }
@@ -543,7 +591,10 @@ private:
                         pitchSlider.setValue(pitchSlider.getValue());
                 else if (slider == &durationSlider)
                         durationSlider.setValue(durationSlider.getValue());
-        }
+                else if (slider == &fileLocSlider){
+                        playbackPosition.set(fileLocSlider.getValue() * lenInSamples);
+                        //std::cout << playbackPosition.get() << std::endl;
+                }        }
 
         void paintIfFileLoaded(Graphics&g, const Rectangle<int> & thumbnailBounds)
         {
@@ -563,8 +614,7 @@ private:
 
                 g.setColour (Colours::green);
 
-                const double audioPosition (transportSource.getCurrentPosition());
-                const float drawPosition ((audioPosition / audioLength) * thumbnailBounds.getWidth()
+                const float drawPosition ((( (double)playbackPosition.get() / (double)44100 ) / audioLength) * thumbnailBounds.getWidth()
                                           + thumbnailBounds.getX());
                 g.drawLine (drawPosition, thumbnailBounds.getY(), drawPosition,
                             thumbnailBounds.getBottom(), 2.0f);
@@ -604,6 +654,7 @@ private:
                         swapVariables(chosenPath, path);
                         notify();
 
+                        playButton.setEnabled (true);
                         thumbnail.setSource(new FileInputSource(file));
                         // newpath << path << ".out.wav";
 
@@ -643,7 +694,7 @@ private:
         void playButtonClicked()
         {
                 updateLoopState(loopingToggle.getToggleState());
-                changeState(Starting);
+                changeState(Playing);
         }
 
         void stopButtonClicked()
@@ -678,7 +729,8 @@ private:
         String chosenPath;
         int playbackBlockSize;
 
-        double playbackPosition;
+        Atomic<int> playbackPosition;
+        int lenInSamples;
         double duration;
 
 

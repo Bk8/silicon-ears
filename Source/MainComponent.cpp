@@ -289,6 +289,8 @@ private:
 
         void paintIfFileLoaded(Graphics&g, const Rectangle<int> & thumbnailBounds)
         {
+                const double audioLength(thumbnail.getTotalLength());
+
                 g.setColour (Colours::darkgrey);
                 g.fillRect (thumbnailBounds);
 
@@ -297,9 +299,17 @@ private:
                 thumbnail.drawChannel (g,
                                        thumbnailBounds,
                                        0.0,                                    // start time
-                                       thumbnail.getTotalLength(),             // end time
+                                       audioLength,
                                        0,
                                        1.0f);
+
+                g.setColour (Colours::green);
+
+                const double audioPosition (transportSource.getCurrentPosition());
+                const float drawPosition ((audioPosition / audioLength) * thumbnailBounds.getWidth()
+                                          + thumbnailBounds.getX());
+                g.drawLine (drawPosition, thumbnailBounds.getY(), drawPosition,
+                            thumbnailBounds.getBottom(), 2.0f);
         }
 
         void paintIfNoFileLoaded(Graphics&g, const Rectangle<int>& thumbnailBounds)
@@ -319,7 +329,7 @@ private:
                 else
                         paintIfFileLoaded(g, thumbnailBounds);
         }
-    
+
         void openButtonClicked()
         {
                 FileChooser chooser ("Select a Wave file to play...",

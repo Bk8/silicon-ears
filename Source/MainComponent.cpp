@@ -126,24 +126,43 @@ public:
 
                         size_t stretcherSamplesNeeded =  stretcher.getSamplesRequired();
 
+                        int readOverflow = 0;
+                        int readToEnd = 0;
                         if(readOffset + stretcherSamplesNeeded > produceBuffer->getAudioSampleBuffer()->getNumSamples()){
-                                produceBuffer->getAudioSampleBuffer()->clear();
                                 readOffset = 0;
+                                readOverflow = readOffset + stretcherSamplesNeeded %
+                                        produceBuffer->getAudioSampleBuffer()->getNumSamples();
+
+                                readToEnd = produceBuffer->getAudioSampleBuffer() ->getNumSamples() - readOffset;
+                                reader->read(produceBuffer->getAudioSampleBuffer(),
+                                             readOffset,
+                                             readToEnd,
+                                             fileOffset,
+                                             true,
+                                             true);
+                                readOffset += readToEnd;
+
+                                reader->read(produceBuffer->getAudioSampleBuffer(),
+                                             readOffset,
+                                             readOverflow,
+                                             fileOffset,
+                                             true,
+                                             true);
+                                readOffset += readOverflow;
+                        } else {
+                                reader->read(produceBuffer->getAudioSampleBuffer(),
+                                             readOffset,
+                                             stretcherSamplesNeeded,
+                                             fileOffset,
+                                             true,
+                                             true);
                         }
 
                         if(fileOffset > reader->lengthInSamples){
                                 fileOffset = 0;
                         }
 
-                        reader->read(produceBuffer->getAudioSampleBuffer(),
-                                     readOffset,
-                                     stretcherSamplesNeeded,
-                                     fileOffset,
-                                     true,
-                                     true);
-
                         fileOffset += stretcherSamplesNeeded;
-                        //TODO: load this!
 
                         int numProduceChannels = produceBuffer->getAudioSampleBuffer()->getNumChannels();
                         int numConsumeChannels = consumeBuffer->getAudioSampleBuffer()->getNumChannels();
@@ -177,8 +196,9 @@ public:
                         // FIXME: Shitty code. Break to functions
                         if(potentialWrite <
                            consumeBuffer->getAudioSampleBuffer()->getNumSamples()){
-                                while(consumeBuffer->playFrom.get() < potentialWrite){
-                                        std::cerr << "spin inside first writer bounds check " << std::endl;
+                                while(consumeBuffer->playFrom.get() < potentialWrite &&
+                                      consumeBuffer->playFrom.get() > consumeBuffer->writeTo.get()){
+                                        //std::cerr << "spin inside first writer bounds check " << std::endl;
                                 }
                                 for(int channel = 0;
                                     channel < consumeBuffer->getAudioSampleBuffer()->getNumChannels();
@@ -195,10 +215,14 @@ public:
                                 int tmpPlayFrom = consumeBuffer->playFrom.get();
                                 while((tmpPlayFrom > consumeBuffer->writeTo.get() &&
                                        tmpPlayFrom < consumeBuffer-> getAudioSampleBuffer()->getNumSamples()) ||
-                                      (tmpPlayFrom < (consumeBuffer->writeTo.get() %
+                                      (tmpPlayFrom < (potentialWrite %
                                                       consumeBuffer->getAudioSampleBuffer()->getNumSamples()))){
                                         tmpPlayFrom = consumeBuffer->playFrom.get();
-                                        std::cerr << "spinning inside writer bounds check" << std::endl;
+                                        // std::cerr << "in second writespin"
+                                        //           << " writeTo: " <<
+                                        //         consumeBuffer->writeTo.get()
+                                        //           << " potential "
+                                        //           << potentialWrite << std::endl;
                                 }
                                 int spaceLeft = consumeBuffer->getAudioSampleBuffer()->getNumSamples()
                                         - consumeBuffer->writeTo.get();
@@ -241,18 +265,17 @@ public:
                 if (reader != nullptr){
 
 
-                        const double duration = reader->lengthInSamples / reader->sampleRate;
+                        duration = reader->lengthInSamples / reader->sampleRate;
 
                         ReferenceCountedBuffer::Ptr newProdBuffer = new ReferenceCountedBuffer(file.getFileName(),
                                                                                                reader->numChannels,
-                                                                                               reader->lengthInSamples);
+                                                                                               1024 * 1024);
 
                         ReferenceCountedBuffer::Ptr newConsBuffer = new ReferenceCountedBuffer(file.getFileName(),
                                                                                                reader->numChannels,
-                                                                                               reader->lengthInSamples);
+                                                                                               1024 * 1024 * 2);
 
 
-                        reader->read(newProdBuffer->getAudioSampleBuffer(), 0, reader->lengthInSamples, 0, true, true);
                         buffers.add(newProdBuffer);
                         buffers.add(newConsBuffer);
 
@@ -309,7 +332,7 @@ public:
         {
                 playbackBlockSize = bufferToFill.numSamples;
 
-                std::cerr << "getting next audio-block" << std::endl;
+                //std::cerr << "getting next audio-block" << std::endl;
 
                 ReferenceCountedBuffer::Ptr stretched(playStretchedBuffer);
                 if (stretched == nullptr)
@@ -329,9 +352,9 @@ public:
                 int potentialPlay = stretched->playFrom.get() + bufferToFill.numSamples;
                 if(potentialPlay <
                    stretched->getAudioSampleBuffer()->getNumSamples()){
-                        while(potentialPlay > stretched->writeTo.get()){
+                        while((potentialPlay > stretched->writeTo.get())&& (stretched->playFrom.get() < stretched->writeTo.get())){
                                 ;
-                                std::cerr << "spining inside first play bound check" << std::endl;
+                                //                              std::cerr << "spining inside first play bound check" << std::endl;
                         }
                         for(int channel = 0; channel < numOutputChannels; ++channel){
                                 bufferToFill.buffer->copyFrom(channel,
@@ -348,12 +371,13 @@ public:
                                tmpWriteTo < stretched->getAudioSampleBuffer()->getNumSamples()) ||
                               ((potentialPlay % stretched->getAudioSampleBuffer()->getNumSamples()) > tmpWriteTo)){
                                 tmpWriteTo = stretched->writeTo.get();
-                                std::cerr << "Spinning inside second play-bound check" << std::endl;
+                                //std::cerr << "spinning with writeto as: " << tmpWriteTo << " and playfrom as: " << stretched->playFrom.get() <<  " potential is " << potentialPlay << " on a buffer of size " << stretched->getAudioSampleBuffer()->getNumSamples() << std::endl;
                         }
                         int dregs = stretched->getAudioSampleBuffer()->getNumSamples() - stretched->playFrom.get();
                         for(int channel = 0;
                             channel < stretched->getAudioSampleBuffer()->getNumChannels();
                             ++channel){
+                                std::cerr << channel << std::endl;
                                 bufferToFill.buffer->copyFrom(channel,
                                                               0,
                                                               *stretched->getAudioSampleBuffer(),
@@ -365,16 +389,16 @@ public:
                         for(int channel = 0;
                             channel < stretched->getAudioSampleBuffer()->getNumChannels();
                             ++channel){
-                                stretched->getAudioSampleBuffer()->
-                                        copyFrom(channel,
-                                                 dregs,
-                                                 *stretched->getAudioSampleBuffer(),
-                                                 channel % bufferToFill.buffer->getNumChannels(),
-                                                 0,
-                                                 bufferToFill.buffer->getNumSamples() - dregs);
+                                bufferToFill.buffer-> copyFrom(channel,
+                                                               dregs,
+                                                               *stretched->getAudioSampleBuffer(),
+                                                               channel % bufferToFill.buffer->getNumChannels(),
+                                                               0,
+                                                               bufferToFill.buffer->getNumSamples() - dregs);
                         }
 
                         stretched->playFrom.set(dregs);
+
                 }
 
         }
@@ -653,6 +677,10 @@ private:
         // thread coordination
         String chosenPath;
         int playbackBlockSize;
+
+        double playbackPosition;
+        double duration;
+
 
         // sliders
         scaleSlider pitchSlider;

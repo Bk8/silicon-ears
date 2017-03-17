@@ -29,6 +29,10 @@ public:
 
         int position;
 
+        Atomic<int> writeTo;
+
+        Atomic<int> playFrom;
+
 private:
         String name;
         AudioSampleBuffer buffer;

@@ -131,6 +131,10 @@ public:
                                 readOffset = 0;
                         }
 
+                        if(fileOffset > reader->lengthInSamples){
+                                fileOffset = 0;
+                        }
+
                         reader->read(produceBuffer->getAudioSampleBuffer(),
                                      readOffset,
                                      stretcherSamplesNeeded,
@@ -337,6 +341,7 @@ public:
                                                               stretched->playFrom.get(),
                                                               bufferToFill.numSamples);
                         }
+                        stretched->playFrom.set(potentialPlay);
                 } else {
                         int tmpWriteTo = stretched->writeTo.get();
                         while((stretched->playFrom.get() < tmpWriteTo &&

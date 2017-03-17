@@ -69,6 +69,7 @@ public:
             setContentOwned (createMainContentComponent(), true);
             setResizable (true, true);
 
+            setName("Silicon Ears");
             setBoundsRelative(0,0,1,.98f);
             setVisible (true);
         }

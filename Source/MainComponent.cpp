@@ -5,6 +5,7 @@
 #include "RubberBandStretcher.h"
 #include "ReferenceCountedBuffer.h"
 #include <sstream>
+#include <iomanip>
 
 class MainContentComponent   : public AudioAppComponent,
                                public ChangeListener,
@@ -25,7 +26,7 @@ public:
                 state (Stopped),
                 fileLocSlider(Slider::LinearHorizontal, Slider::NoTextBox),
                 thumbnailCache(5),
-                thumbnail(512, formatManager, thumbnailCache)
+                thumbnail(2048, formatManager, thumbnailCache)
         {
                 setLookAndFeel (&lookAndFeel);
                 addAndMakeVisible (&openButton);
@@ -398,8 +399,21 @@ private:
         ReferenceCountedArray<ReferenceCountedBuffer> buffers;
         ReferenceCountedBuffer::Ptr currentBuffer;
 
-        Slider pitchSlider;
-        Slider durationSlider;
+        class scaleSlider : public Slider
+        {
+        public:
+                String getTextFromValue(double value) override
+                {
+                        std::stringstream ss;
+
+                        ss << std::setprecision(2) << std::fixed << value;
+
+                        return ss.str();
+                }
+        };
+
+        scaleSlider pitchSlider;
+        scaleSlider durationSlider;
         Slider fileLocSlider;
         Label pitchLabel;
         Label durationLabel;

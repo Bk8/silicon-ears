@@ -2,7 +2,7 @@
 #define MAINCOMPONENT_H_INCLUDED
 
 #include "../JuceLibraryCode/JuceHeader.h"
-#include "rubberband/RubberBandStretcher.h"
+#include "RubberBandStretcher.h"
 #include "ReferenceCountedBuffer.h"
 #include <sstream>
 
@@ -22,7 +22,10 @@ public:
                           RubberBand::RubberBandStretcher::OptionProcessRealTime,
                           1.0,
                           1.0),
-                state (Stopped)
+                state (Stopped),
+                fileLocSlider(Slider::LinearHorizontal, Slider::NoTextBox),
+                thumbnailCache(5),
+                thumbnail(512, formatManager, thumbnailCache)
         {
                 setLookAndFeel (&lookAndFeel);
                 addAndMakeVisible (&openButton);
@@ -49,21 +52,27 @@ public:
 
                 addAndMakeVisible(pitchLabel);
                 pitchLabel.setText("Pitch", dontSendNotification);
-                pitchLabel.attachToComponent(&pitchSlider, true);
 
                 addAndMakeVisible(pitchSlider);
                 pitchSlider.setRange(0.25, 4);
                 pitchSlider.setValue(1.0);
                 pitchSlider.addListener(this);
 
+                addAndMakeVisible(fileLocSlider);
+                fileLocSlider.setRange(0, 1);
+                fileLocSlider.setValue(0);
+                fileLocSlider.addListener(this);
+
+
                 addAndMakeVisible(durationLabel);
                 durationLabel.setText("Duration", dontSendNotification);
-                durationLabel.attachToComponent(&durationSlider, true);
 
                 addAndMakeVisible(durationSlider);
                 durationSlider.setRange(0.25, 4);
                 durationSlider.setValue(1.0);
                 durationSlider.addListener(this);
+
+                thumbnail.addChangeListener(this);
 
                 setSize (300, 200);
 
@@ -71,13 +80,14 @@ public:
                 transportSource.addChangeListener (this);
 
                 setAudioChannels (2, 2);
-                startTimer (20);
+                startTimer (40);
 
                 startThread();
         }
 
         ~MainContentComponent()
         {
+                stopThread(10);
                 shutdownAudio();
         }
 
@@ -110,16 +120,19 @@ public:
 
         void getNextAudioBlock (const AudioSourceChannelInfo& bufferToFill) override
         {
-                if (readerSource == nullptr)
+                ReferenceCountedBuffer::Ptr retainedCurrentBuffer(currentBuffer);
+                if (retainedCurrentBuffer == nullptr)
                         {
                                 bufferToFill.clearActiveBufferRegion();
                                 return;
                         }
 
-                transportSource.getNextAudioBlock (bufferToFill);
+                AudioSampleBuffer *currentAudioSampleBuffer(retainedCurrentBuffer->getAudioSampleBuffer());
+
+                int position = retainedCurrentBuffer->position;
 
 
-                // const float **bufferToRead = bufferToFill.buffer->getArrayOfReadPointers();
+                const float **bufferToRead = bufferToFill.buffer->getArrayOfReadPointers();
 
                 // stretcher.setPitchScale(pitchSlider.getValue());
                 // stretcher.setTimeRatio(durationSlider.getValue());
@@ -128,7 +141,7 @@ public:
 
                 // float **bufferToWrite = bufferToFill.buffer->getArrayOfWritePointers();
 
-                // stretcher.retrieve(bufferToWrite, bufferToFill.numSamples);
+                //stretcher.retrieve(bufferToWrite, bufferToFill.numSamples);
 
         }
 
@@ -139,26 +152,55 @@ public:
 
         void resized() override
         {
-                openButton.setBounds (10, 10, getWidth() - 20, 20);
-                playButton.setBounds (10, 40, getWidth() - 20, 20);
-                stopButton.setBounds (10, 70, getWidth() - 20, 20);
-                loopingToggle.setBounds(10, 100, getWidth() - 20, 20);
-                currentPositionLabel.setBounds (10, 130, getWidth() - 20, 20);
+                const int border = 10;
 
-                const int sliderLeft = 120;
-                pitchSlider.setBounds(sliderLeft, 150, getWidth() - sliderLeft - 10, 20);
-                durationSlider.setBounds(sliderLeft, 170, getWidth() - sliderLeft - 10, 20);
+                openButton.setBounds (border, 10, getWidth() - 20, 20);
+                playButton.setBounds (border, 40, getWidth() - 20, 20);
+                stopButton.setBounds (border, 70, getWidth() - 20, 20);
+                loopingToggle.setBounds(border, 100, getWidth() - 20, 20);
+                currentPositionLabel.setBounds (border, 130, getWidth() - 20, 20);
+
+                const int buttonsBottom = 150;
+
+                const int waveFormbottom = 0;
+                const int waveFormTop = 0;
+                const int waveFormLeft = border;
+                const int waveFormRight = 0;
+
+                const int sliderLeft = border;
+                const int sliderSpacing = 20;
+                const int slidersRight = getWidth() - border - sliderSpacing;
+                const int slidersBottom  = getBottom() - 30;
+
+                fileLocSlider.setBounds(sliderLeft, getHeight() - 100, getWidth() - sliderLeft - border, 20);
+
+                const int labelWidth = 70;
+                const int labelSlidersKludge = slidersRight - 55;
+                durationLabel.setBounds(labelSlidersKludge + sliderLeft, slidersBottom - sliderSpacing, labelWidth, sliderSpacing);
+                pitchLabel.setBounds(labelSlidersKludge + sliderLeft, slidersBottom, labelWidth, sliderSpacing);
+
+                const int vertSliderHeight = slidersBottom - buttonsBottom - 2 * border - sliderSpacing;
+                durationSlider.setBounds(sliderLeft, slidersBottom - sliderSpacing, labelSlidersKludge, sliderSpacing);
+                pitchSlider.setBounds(sliderLeft, slidersBottom, labelSlidersKludge, sliderSpacing);
+        }
+
+        void transportSourceChanged()
+        {
+                if (transportSource.isPlaying())
+                        changeState (Playing);
+                else
+                        changeState (Stopped);
+        }
+
+        void thumbNailChanged()
+        {
+                repaint();
         }
 
         void changeListenerCallback (ChangeBroadcaster* source) override
         {
-                if (source == &transportSource)
-                        {
-                                if (transportSource.isPlaying())
-                                        changeState (Playing);
-                                else
-                                        changeState (Stopped);
-                        }
+                if(source == &transportSource) transportSourceChanged();
+                if(source == &thumbnail) thumbNailChanged();
         }
 
         void buttonClicked (Button* button) override
@@ -187,6 +229,8 @@ public:
                         {
                                 currentPositionLabel.setText ("Stopped", dontSendNotification);
                         }
+
+                repaint();
         }
 
         void updateLoopState (bool shouldLoop)
@@ -197,13 +241,7 @@ public:
 
 
 private:
-        ReferenceCountedArray<ReferenceCountedBuffer> buffers;
-        ReferenceCountedBuffer::Ptr currentBuffer;
 
-        Slider pitchSlider;
-        Slider durationSlider;
-        Label pitchLabel;
-        Label durationLabel;
         RubberBand::RubberBandStretcher stretcher;
         enum TransportState
                 {
@@ -249,6 +287,39 @@ private:
                         durationSlider.setValue(durationSlider.getValue());
         }
 
+        void paintIfFileLoaded(Graphics&g, const Rectangle<int> & thumbnailBounds)
+        {
+                g.setColour (Colours::darkgrey);
+                g.fillRect (thumbnailBounds);
+
+                g.setColour (Colour((uint8) 89, (uint8)121, (uint8)165, .8f));
+
+                thumbnail.drawChannel (g,
+                                       thumbnailBounds,
+                                       0.0,                                    // start time
+                                       thumbnail.getTotalLength(),             // end time
+                                       0,
+                                       1.0f);
+        }
+
+        void paintIfNoFileLoaded(Graphics&g, const Rectangle<int>& thumbnailBounds)
+        {
+                g.setColour (Colours::darkgrey);
+                g.fillRect (thumbnailBounds);
+                g.setColour (Colours::white);
+                g.drawFittedText ("No File Loaded", thumbnailBounds, Justification::centred, 1.0f);
+        }
+
+        void paint(Graphics &g) override
+        {
+                const Rectangle<int> thumbnailBounds(10, 160, getWidth() - 20, getHeight() - 120 - 160);
+
+                if(thumbnail.getNumChannels() == 0)
+                        paintIfNoFileLoaded(g, thumbnailBounds);
+                else
+                        paintIfFileLoaded(g, thumbnailBounds);
+        }
+    
         void openButtonClicked()
         {
                 FileChooser chooser ("Select a Wave file to play...",
@@ -262,31 +333,37 @@ private:
                         const File file (chooser.getResult());
                         String path = file.getFullPathName();
 
-                        newpath << path << ".out.wav";
+                        // newpath << path << ".out.wav";
 
-                        ss << "rubberband -t "
-                           << durationSlider.getValue()
-                           << " -f "
-                           << pitchSlider.getValue()
-                           << " " << path << " "
-                           << newpath.str();
+                        // ss << "/usr/local/bin/rubberband -t "
+                        //    << durationSlider.getValue()
+                        //    << " -f "
+                        //    << pitchSlider.getValue()
+                        //    << " " << path << " "
+                        //    << newpath.str();
 
-                        std::cerr << "here:" << ss.str() << std::endl;
-                        std::system(ss.str().c_str());
-                        std::cerr << "there" << std::endl;
+                        // std::cerr << "here:" << ss.str() << std::endl;
+                        // std::system(ss.str().c_str());
+                        // std::cerr << "there" << std::endl;
 
-                        const File fuck = File(path);
+                        // const File fuck = File(newpath.str());
 
 
 
-                        AudioFormatReader* reader = formatManager.createReaderFor(fuck);
-                        std::cerr << "created reader";
+                        ScopedPointer<AudioFormatReader> reader = formatManager.createReaderFor(file);
                         if (reader != nullptr){
-                                ScopedPointer<AudioFormatReaderSource> newSource =
-                                        new AudioFormatReaderSource (reader, true);
-                                transportSource.setSource (newSource, 0, nullptr, reader->sampleRate);
-                                playButton.setEnabled (true);
-                                readerSource = newSource.release();
+
+                                thumbnail.setSource(new FileInputSource(file));
+
+                                const double duration = reader->lengthInSamples / reader->sampleRate;
+
+                                ReferenceCountedBuffer::Ptr newBuffer = new ReferenceCountedBuffer(file.getFileName(),
+                                                                                                   reader->numChannels,
+                                                                                                   reader->lengthInSamples);
+
+                                reader->read(newBuffer->getAudioSampleBuffer(), 0, reader->lengthInSamples, 0, true, true);
+                                currentBuffer = newBuffer;
+                                buffers.add(newBuffer);
                         }
                 }
         }
@@ -308,6 +385,15 @@ private:
         }
 
         //==========================================================================
+        ReferenceCountedArray<ReferenceCountedBuffer> buffers;
+        ReferenceCountedBuffer::Ptr currentBuffer;
+
+        Slider pitchSlider;
+        Slider durationSlider;
+        Slider fileLocSlider;
+        Label pitchLabel;
+        Label durationLabel;
+
         TextButton openButton;
         TextButton playButton;
         TextButton stopButton;
@@ -315,6 +401,9 @@ private:
         Label currentPositionLabel;
 
         AudioFormatManager formatManager;
+        AudioThumbnailCache thumbnailCache;
+        AudioThumbnail thumbnail;
+
         ScopedPointer<AudioFormatReaderSource> readerSource;
         AudioTransportSource transportSource;
         TransportState state;

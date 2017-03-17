@@ -12,7 +12,7 @@
 #define STRECHOTRON_H_INCLUDED
 
 #include "../JuceLibraryCode/JuceHeader.h"
-#include <rubberband/RubberBandStretcher.h>
+#include <RubberBandStretcher.h>
 
 
 

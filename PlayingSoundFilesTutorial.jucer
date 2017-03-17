@@ -5,6 +5,8 @@
               includeBinaryInAppConfig="1" jucerVersion="4.3.1">
   <MAINGROUP id="BNpHuD" name="PlayingSoundFilesTutorial">
     <GROUP id="{B1795414-5B06-F2B5-EC13-A53FD0B4EDE6}" name="Source">
+      <FILE id="VgAHyL" name="strechotron.cpp" compile="1" resource="0" file="Source/strechotron.cpp"/>
+      <FILE id="qHFIWx" name="strechotron.h" compile="0" resource="0" file="Source/strechotron.h"/>
       <FILE id="G6KY7E" name="ReferenceCountedBuffer.cpp" compile="1" resource="0"
             file="Source/ReferenceCountedBuffer.cpp"/>
       <FILE id="zsqIyQ" name="ReferenceCountedBuffer.h" compile="0" resource="0"
@@ -15,7 +17,8 @@
     </GROUP>
   </MAINGROUP>
   <EXPORTFORMATS>
-    <XCODE_MAC targetFolder="Builds/MacOSX">
+    <XCODE_MAC targetFolder="Builds/MacOSX" externalLibraries="rubberband" extraCompilerFlags="-I/Users/manny/music352/Silicon-Ears/breakfastquay-rubberband-ccd7ae8807d2/rubberband&#10;-stdlib=libc++&#10;&#10;"
+               extraLinkerFlags="-L/Users/manny/music352/Silicon-Ears/breakfastquay-rubberband-ccd7ae8807d2/lib&#10;">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="10.9 SDK" osxArchitecture="default"
                        isDebug="1" optimisation="1" targetName="PlayingSoundFilesTutorial"/>
@@ -23,20 +26,20 @@
                        isDebug="0" optimisation="2" targetName="PlayingSoundFilesTutorial"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
-        <MODULEPATH id="juce_core" path="../../juce/modules"/>
-        <MODULEPATH id="juce_events" path="../../juce/modules"/>
-        <MODULEPATH id="juce_graphics" path="../../juce/modules"/>
-        <MODULEPATH id="juce_data_structures" path="../../juce/modules"/>
-        <MODULEPATH id="juce_gui_basics" path="../../juce/modules"/>
-        <MODULEPATH id="juce_gui_extra" path="../../juce/modules"/>
-        <MODULEPATH id="juce_cryptography" path="../../juce/modules"/>
-        <MODULEPATH id="juce_video" path="../../juce/modules"/>
-        <MODULEPATH id="juce_opengl" path="../../juce/modules"/>
-        <MODULEPATH id="juce_audio_basics" path="../../juce/modules"/>
-        <MODULEPATH id="juce_audio_devices" path="../../juce/modules"/>
-        <MODULEPATH id="juce_audio_formats" path="../../juce/modules"/>
-        <MODULEPATH id="juce_audio_processors" path="../../juce/modules"/>
-        <MODULEPATH id="juce_audio_utils" path="../../juce/modules"/>
+        <MODULEPATH id="juce_core" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_cryptography" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_video" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_opengl" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_basics" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="../../JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
     <VS2013 targetFolder="Builds/VisualStudio2013">
